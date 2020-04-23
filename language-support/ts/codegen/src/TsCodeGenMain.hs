@@ -6,7 +6,6 @@ module TsCodeGenMain (main) where
 import DA.Directory
 import qualified DA.Daml.LF.Proto3.Archive as Archive
 import qualified DA.Daml.LF.Reader as DAR
-import qualified DA.Pretty
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map as Map
@@ -22,6 +21,7 @@ import Data.Aeson.Encode.Pretty
 import Control.Monad.Extra
 import DA.Daml.LF.Ast
 import DA.Daml.LF.Ast.Optics
+import qualified DA.Daml.LF.Ast.Pretty as LF
 import Data.Either
 import Data.Tuple.Extra
 import Data.List.Extra
@@ -490,8 +490,8 @@ genType curModName = go
                     )
         TCon _ -> error "IMPOSSIBLE: lonely type constructor"
         TSynApp{} -> error "IMPOSSIBLE: type synonym not serializable"
-        t@TApp{} -> error $ "IMPOSSIBLE: type application not serializable - " <> DA.Pretty.renderPretty t
-        TBuiltin t -> error $ "IMPOSSIBLE: partially applied primitive type not serializable - " <> DA.Pretty.renderPretty t
+        t@TApp{} -> error $ "IMPOSSIBLE: type application not serializable - " <> LF.renderPrettySC t
+        TBuiltin t -> error $ "IMPOSSIBLE: partially applied primitive type not serializable - " <> LF.renderPrettySC t
         TForall{} -> error "IMPOSSIBLE: universally quantified type not serializable"
         TStruct{} -> error "IMPOSSIBLE: structural record not serializable"
         TNat{} -> error "IMPOSSIBLE: standalone type level natural not serializable"

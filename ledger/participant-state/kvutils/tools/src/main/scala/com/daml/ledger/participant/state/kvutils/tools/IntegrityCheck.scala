@@ -7,7 +7,7 @@ import java.io.{DataInputStream, FileInputStream}
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
-import com.codahale.metrics
+// import com.codahale.metrics
 import com.codahale.metrics.MetricRegistry
 import com.daml.ledger.participant.state.kvutils.{DamlKvutils => Proto, _}
 import com.daml.ledger.participant.state.v1._
@@ -76,7 +76,7 @@ object IntegrityCheck extends App {
         .map(k => k -> state.get(k))
         .toMap
 
-    print(s"verifying ${Pretty.prettyEntryId(entry.getEntryId)}: commit... ")
+    print(s"verifying ${Pretty.prettyEntryId(entry.getEntryId)} [${submission.getPayloadCase}]: commit... ")
     val (t_commit, (logEntry2, outputState)) = Helpers.time(
       () =>
         keyValueCommitting.processSubmission(
@@ -134,12 +134,12 @@ object IntegrityCheck extends App {
   }
 
   // Dump detailed metrics.
-  val reporter = metrics.ConsoleReporter
-    .forRegistry(metricRegistry)
-    .convertRatesTo(TimeUnit.SECONDS)
-    .convertDurationsTo(TimeUnit.MILLISECONDS)
-    .build
-  reporter.report()
+  // val reporter = metrics.ConsoleReporter
+  //   .forRegistry(metricRegistry)
+  //   .convertRatesTo(TimeUnit.SECONDS)
+  //   .convertDurationsTo(TimeUnit.MILLISECONDS)
+  //   .build
+  // reporter.report()
 
   println(s"Verified $count messages.")
   println(s"processSubmission: ${TimeUnit.NANOSECONDS.toMillis(total_t_commit)}ms total.")
