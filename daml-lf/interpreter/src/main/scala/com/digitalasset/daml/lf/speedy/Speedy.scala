@@ -363,7 +363,7 @@ object Speedy {
             machine.env.addAll(pap.args)
 
             // And start evaluating the body of the closure.
-            machine.ctrl = CtrlExpr(expr)
+            machine.ctrl = expr.execute(machine)
 
           case PBuiltin(b) =>
             try {
@@ -558,7 +558,7 @@ object Speedy {
             machine.kont.add(KPushTo(extendedArgs, arg))
             i = i + 1
           }
-          machine.ctrl = CtrlExpr(newArgs(0))
+          machine.ctrl = newArgs(0).execute(machine)
 
         case _ =>
           crash(s"Applying non-PAP: $v")
@@ -652,11 +652,10 @@ object Speedy {
           crash("Match on non-matchable value")
       }
 
-      machine.ctrl = CtrlExpr(
-        altOpt
-          .getOrElse(throw DamlEMatchError(s"No match for $v in ${alts.toList}"))
-          .body,
-      )
+      machine.ctrl = altOpt
+        .getOrElse(throw DamlEMatchError(s"No match for $v in ${alts.toList}"))
+        .body
+        .execute(machine)
     }
 
   }
@@ -670,7 +669,7 @@ object Speedy {
   final case class KPushTo(to: util.ArrayList[SValue], next: SExpr) extends Kont {
     def execute(v: SValue, machine: Machine) = {
       to.add(v)
-      machine.ctrl = CtrlExpr(next)
+      machine.ctrl = next.execute(machine)
     }
   }
 
@@ -695,7 +694,7 @@ object Speedy {
   final case class KCatch(handler: SExpr, fin: SExpr, envSize: Int) extends Kont {
 
     def execute(v: SValue, machine: Machine) = {
-      machine.ctrl = CtrlExpr(fin)
+      machine.ctrl = fin.execute(machine)
     }
   }
 
