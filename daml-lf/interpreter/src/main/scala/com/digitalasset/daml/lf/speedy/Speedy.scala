@@ -122,6 +122,34 @@ object Speedy {
 
       }
 
+    /** Perform a single step of the machine execution. */
+    def stepMany(): SResult =
+      try {
+        while (!isFinal) {
+          val ctrlToExecute = ctrl
+          // Set control to crash as it must be reset after execution. This guards
+          // against e.g. buggy builtin operations which do not set control and could
+          // then not advance the machine state.
+          ctrl = CtrlCrash(ctrlToExecute)
+          ctrlToExecute.execute(this)
+        }
+        SResultContinue
+      } catch {
+        case SpeedyHungry(res: SResult) =>
+          res
+
+        case serr: SError =>
+          serr match {
+            case _: SErrorDamlException if tryHandleException =>
+              SResultContinue
+            case _ => SResultError(serr)
+          }
+
+        case ex: RuntimeException =>
+          SResultError(SErrorCrash(s"exception: $ex"))
+
+      }
+
     /** Try to handle a DAML exception by looking for
       * the catch handler. Returns true if the exception
       * was catched.
