@@ -4,8 +4,14 @@
 package com.daml.lf.engine.trigger
 
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, PostStop, Scheduler}
+import akka.actor.typed.scaladsl.AbstractBehavior
+import akka.actor.typed.SupervisorStrategy._
+import akka.actor.typed.Signal
+import akka.actor.typed.PostStop
+import akka.actor.typed.PreRestart
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.adapter._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
@@ -21,6 +27,7 @@ import java.io.ByteArrayInputStream
 import java.time.Duration
 import java.util.UUID
 import java.util.zip.ZipInputStream
+import com.typesafe.scalalogging.StrictLogging
 
 import com.daml.ledger.api.refinements.ApiTypes.Party
 
@@ -66,26 +73,22 @@ case class LedgerConfig(
     commandTtl: Duration,
 )
 
-object TriggerActor {
-  sealed trait Message
-  final case object Stop extends Message
+case class TriggerConfig(
+    compiledPackages: CompiledPackages,
+    trigger: Trigger,
+    ledgerConfig: LedgerConfig,
+    party: Party,
+)
+
+object TriggerRunnerImpl {
+  import TriggerRunner.{Message, Stop}
   final case class Failed(error: Throwable) extends Message
   final case class QueryACSFailed(cause: Throwable) extends Message
-  final case class QueriedACS(
-      runner: Runner,
-      acs: Seq[CreatedEvent],
-      offset: LedgerOffset,
-  ) extends Message
-
-  case class Config(
-      compiledPackages: CompiledPackages,
-      trigger: Trigger,
-      ledgerConfig: LedgerConfig,
-      party: Party,
-  )
+  final case class QueriedACS(runner: Runner, acs: Seq[CreatedEvent], offset: LedgerOffset)
+      extends Message
 
   def apply(
-      config: Config,
+      config: TriggerConfig,
   )(implicit esf: ExecutionSequencerFactory, mat: Materializer): Behavior[Message] =
     Behaviors.setup { ctx =>
       implicit val ec: ExecutionContext = ctx.executionContext
@@ -172,6 +175,45 @@ object TriggerActor {
     }
 }
 
+class TriggerRunner(ctx: ActorContext[TriggerRunner.Message], config: TriggerConfig, name: String)(
+    implicit esf: ExecutionSequencerFactory,
+    mat: Materializer)
+    extends AbstractBehavior[TriggerRunner.Message](ctx)
+    with StrictLogging {
+  import TriggerRunner.{Message, Stop}
+
+  private val id = name
+  private val child =
+    ctx.spawn(Behaviors.supervise(TriggerRunnerImpl(config)).onFailure(restart), name)
+
+  override def onMessage(msg: Message): Behavior[Message] =
+    Behaviors.receiveMessagePartial[Message] {
+      case Stop =>
+        child ! Stop
+        Behaviors.stopped
+    }
+
+  override def onSignal: PartialFunction[Signal, Behavior[Message]] = {
+    case PreRestart =>
+      logger.debug(s"Trigger ${id} will be restarted")
+      this
+    case PostStop =>
+      logger.debug(s"Trigger ${id} stopped")
+      this
+  }
+
+}
+
+object TriggerRunner {
+  sealed trait Message
+  final case object Stop extends Message
+
+  def apply(config: TriggerConfig, name: String)(
+      implicit esf: ExecutionSequencerFactory,
+      mat: Materializer): Behavior[TriggerRunner.Message] =
+    Behaviors.setup(ctx => new TriggerRunner(ctx, config, name))
+}
+
 object Server {
 
   sealed trait Message
@@ -197,8 +239,8 @@ object Server {
     }
   }
 
-  case class TriggerActorWithParty(
-      ref: ActorRef[TriggerActor.Message],
+  case class TriggerRunnerWithParty(
+      ref: ActorRef[TriggerRunner.Message],
       party: Party,
   )
 
@@ -214,7 +256,7 @@ object Server {
     implicit val esf: ExecutionSequencerFactory =
       new AkkaExecutionSequencerPool("TriggerService")(untypedSystem)
 
-    var triggers: Map[UUID, TriggerActorWithParty] = Map.empty
+    var triggers: Map[UUID, TriggerRunnerWithParty] = Map.empty
     var triggersByParty: Map[Party, Set[UUID]] = Map.empty
 
     // Mutable in preparation for dynamic package upload.
@@ -238,12 +280,13 @@ object Server {
                   case Right(trigger) =>
                     val party = params.party
                     val uuid = UUID.randomUUID
+                    val tag = uuid.toString
                     val ref = ctx.spawn(
-                      TriggerActor(
-                        TriggerActor.Config(compiledPackages, trigger, ledgerConfig, party)),
-                      uuid.toString,
-                    )
-                    triggers = triggers + (uuid -> TriggerActorWithParty(ref, party))
+                      TriggerRunner(
+                        TriggerConfig(compiledPackages, trigger, ledgerConfig, party),
+                        tag),
+                      name = tag + "_SUPERVISOR")
+                    triggers = triggers + (uuid -> TriggerRunnerWithParty(ref, party))
                     val newTriggerSet = triggersByParty.getOrElse(party, Set()) + uuid
                     triggersByParty = triggersByParty + (party -> newTriggerSet)
                     val triggerIdResult = JsObject(("triggerId", uuid.toString.toJson))
@@ -299,7 +342,7 @@ object Server {
       delete {
         pathPrefix("stop" / JavaUUID) { uuid =>
           val actorWithParty = triggers.get(uuid).get
-          actorWithParty.ref ! TriggerActor.Stop
+          actorWithParty.ref ! TriggerRunner.Stop
           triggers = triggers - uuid
           val party = actorWithParty.party
           val newTriggerSet = triggersByParty.get(party).get - uuid
