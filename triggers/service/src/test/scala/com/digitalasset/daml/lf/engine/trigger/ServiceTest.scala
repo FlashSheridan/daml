@@ -261,8 +261,8 @@ class ServiceTest extends AsyncFlatSpec with Eventually with Matchers {
           }
         }
         // format: on
-        resp <- stopTrigger(uri, triggerId)
-        _ <- assert(resp.status.isSuccess)
+        //resp <- stopTrigger(uri, triggerId)
+        //_ <- assert(resp.status.isSuccess)
       } yield succeed
   }
 }

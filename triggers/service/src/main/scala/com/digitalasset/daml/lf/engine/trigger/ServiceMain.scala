@@ -7,8 +7,10 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior, PostStop, Scheduler}
 import akka.actor.typed.scaladsl.AbstractBehavior
 import akka.actor.typed.SupervisorStrategy._
 import akka.actor.typed.Signal
+import akka.actor.typed._
 import akka.actor.typed.PostStop
 import akka.actor.typed.PreRestart
+import akka.actor.typed.ChildFailed
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.ActorContext
@@ -20,8 +22,9 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.Route
-import akka.stream.{KillSwitch, KillSwitches, Materializer}
-import akka.stream.scaladsl.Source
+import akka.stream.{/*KillSwitch, KillSwitches, */Materializer}
+import akka.stream.scaladsl._
+//import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import java.io.ByteArrayInputStream
 import java.time.Duration
@@ -121,7 +124,8 @@ object TriggerRunnerImpl {
               val (killSwitch, trigger) = runner.runWithACS(
                 acs,
                 offset,
-                msgFlow = KillSwitches.single[TriggerMsg],
+                msgFlow = Flow[TriggerMsg].map(
+                  _ => throw new RuntimeException("intentional failure")) //KillSwitches.single[TriggerMsg],
               )
               // TODO If we are stopped we will end up causing the
               // future to complete which will trigger a message that
@@ -131,7 +135,7 @@ object TriggerRunnerImpl {
                 case Success(_) => Failed(new RuntimeException("Trigger exited unexpectedly"))
                 case Failure(cause) => Failed(cause)
               }
-              running(killSwitch)
+              running(/*killSwitch*/)
             }
           case Stop =>
             // We got a stop message but the ACS query hasn't
@@ -140,15 +144,19 @@ object TriggerRunnerImpl {
         }
 
       // Trigger loop is started, wait until we should stop.
-      def running(killSwitch: KillSwitch) =
+      def running(/*killSwitch: KillSwitch*/) =
         Behaviors
           .receiveMessagePartial[Message] {
             case Stop =>
               Behaviors.stopped
+            case Failed(cause) => {
+              println("*** Failed detected!!")
+              throw new RuntimeException(cause)
+            }
           }
           .receiveSignal {
             case (_, PostStop) =>
-              killSwitch.shutdown
+              //killSwitch.shutdown
               Behaviors.same
           }
 
@@ -184,7 +192,7 @@ class TriggerRunner(ctx: ActorContext[TriggerRunner.Message], config: TriggerCon
 
   private val id = name
   private val child =
-    ctx.spawn(Behaviors.supervise(TriggerRunnerImpl(config)).onFailure(restart), name)
+    ctx.spawn(Behaviors.supervise(TriggerRunnerImpl(config)).onFailure[Exception](restart), name)
 
   override def onMessage(msg: Message): Behavior[Message] =
     Behaviors.receiveMessagePartial[Message] {
@@ -194,10 +202,15 @@ class TriggerRunner(ctx: ActorContext[TriggerRunner.Message], config: TriggerCon
     }
 
   override def onSignal: PartialFunction[Signal, Behavior[Message]] = {
+    case ChildFailed(_, _) =>
+      println("**** child failed")
+      this
     case PreRestart =>
+      println("**** restarting")
       logger.debug(s"Trigger ${id} will be restarted")
       this
     case PostStop =>
+      println("**** stopping")
       logger.debug(s"Trigger ${id} stopped")
       this
   }

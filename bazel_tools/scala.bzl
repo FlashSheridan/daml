@@ -40,7 +40,7 @@ common_scalacopts = [
     "-Xfuture",
     # better error reporting for pureconfig
     "-Xmacro-settings:materialize-derivations",
-    "-Xfatal-warnings",
+    #"-Xfatal-warnings",
     # catch missing string interpolators
     "-Xlint:missing-interpolator",
     # adapted args is a deprecated feature:
