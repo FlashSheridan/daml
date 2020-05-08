@@ -147,6 +147,35 @@ final class Engine {
       )
     } yield result
 
+  // Package private for testing purpose only.
+  // Do not use outside Engine.
+  private[lf] def areEquivalentTransaction(tx1: Tx.Transaction, tx2: Tx.Transaction): Boolean = {
+
+    val localDiscriminators =
+      tx1.localContracts.keys.collect {
+        case Value.AbsoluteContractId.V1(discriminator, _) => discriminator
+      }.toSet
+
+    // We do not compare suffix for local contract IDs.
+    // See Contract ID specification daml-lf/spec/contract-id.rst
+    // This implicit is used `isReplayBy`.
+    implicit val cidEqual: scalaz.Equal[Tx.TContractId] =
+      (cid1: Tx.TContractId, cid2: Tx.TContractId) =>
+        cid1 match {
+          case Value.AbsoluteContractId.V1(discriminator, suffix1) =>
+            cid2 match {
+              case Value.AbsoluteContractId.V1(`discriminator`, suffix2) =>
+                suffix1 == suffix2 || localDiscriminators(discriminator)
+              case _ =>
+                false
+            }
+          case Value.AbsoluteContractId.V0(_) | Value.RelativeContractId(_) =>
+            cid1 == cid2
+      }
+
+    (tx1 isReplayedBy tx2)
+  }
+
   /**
     * Check if the given transaction is a valid result of some single-submitter command.
     *
@@ -208,7 +237,7 @@ final class Engine {
         globalCids,
       )
       (rtx, _) = result
-      validationResult <- if (tx isReplayedBy rtx) {
+      validationResult <- if (areEquivalentTransaction(tx, rtx)) {
         ResultDone.Unit
       } else {
         ResultError(
