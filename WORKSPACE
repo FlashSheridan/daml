@@ -97,9 +97,8 @@ common_nix_file_deps = [
 
 # Use Nix provisioned cc toolchain
 nixpkgs_cc_configure(
-    nix_file = "//nix:bazel-cc-toolchain.nix",
+    nix_file = "@//nix:bazel-cc-toolchain.nix",
     nix_file_deps = common_nix_file_deps + [
-        "//nix:bazel-cc-toolchain.nix",
         "//nix:tools/bazel-cc-toolchain/default.nix",
     ],
     repositories = dev_env_nix_repos,
