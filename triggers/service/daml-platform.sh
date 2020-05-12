@@ -26,8 +26,7 @@ done
 echo "Connected to sandbox."
 
 bazel run //triggers/service:trigger-service-binary -- \
-  --http-port $TRIGGER_SERVICE_HTTP_PORT --ledger-host $LEDGER_HOST --ledger-port $LEDGER_PORT --wall-clock-time &
-TRIGGER_SERVICE_PID=$!
+  --http-port $TRIGGER_SERVICE_HTTP_PORT --ledger-host $LEDGER_HOST --ledger-port $LEDGER_TRIGGER_SERVICE_PID=$!
 
 # A smoke test:
 #  curl -X GET \
