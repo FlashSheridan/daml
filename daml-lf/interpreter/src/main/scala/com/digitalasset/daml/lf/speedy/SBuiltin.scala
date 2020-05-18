@@ -26,6 +26,7 @@ import com.daml.lf.transaction.{Transaction => Tx}
 import com.daml.lf.value.{Value => V}
 import com.daml.lf.value.ValueVersions.asVersionedValue
 import com.daml.lf.transaction.Node.{GlobalKey, KeyWithMaintainers}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
@@ -43,6 +44,10 @@ sealed abstract class SBuiltin(val arity: Int) {
 }
 
 object SBuiltin {
+
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  logger.error("pre")
+
   //
   // Arithmetic
   //
