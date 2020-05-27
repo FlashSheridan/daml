@@ -155,7 +155,8 @@ private[events] object EventsTableFlatEventsRangeQueries {
     ): SimpleSql[Row] = {
       // TODO(Leo): clean it up, figure out how offsetClause can be re-used
       val (lastOffset, lastNodeIndex) = lastEvent.getOrElse((Offset.begin, Integer.MAX_VALUE))
-      SQL"""select #$selectColumns, array[$party] as event_witnesses, case when submitter = $party then command_id else '' end as command_id from #$flatEventsTable where (event_offset > ${between._1} or (event_offset = $lastOffset and node_index > $lastNodeIndex)) and event_offset <= ${between._2} and event_witness = $party order by (#$orderByColumns) limit $pageSize"""
+      val witnessesClause = s"flat_event_witnesses @> array['$party']"
+      SQL"""select #$selectColumns, array[$party] as event_witnesses, case when submitter = $party then command_id else '' end as command_id from participant_events where (event_offset > ${between._1} or (event_offset = $lastOffset and node_index > $lastNodeIndex)) and event_offset <= ${between._2} and #$witnessesClause order by (#$orderByColumns) limit $pageSize"""
     }
 
     override protected def singlePartyWithTemplates(
