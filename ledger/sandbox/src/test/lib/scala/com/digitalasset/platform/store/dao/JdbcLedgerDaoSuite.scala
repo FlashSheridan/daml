@@ -17,7 +17,7 @@ import com.daml.lf.archive.DarReader
 import com.daml.lf.data.Ref.{Identifier, Party}
 import com.daml.lf.data.{ImmArray, Ref}
 import com.daml.lf.transaction.Node._
-import com.daml.lf.transaction.{GenTransaction, Node}
+import com.daml.lf.transaction.{GenTransaction, Node, Transaction => Tx}
 import com.daml.lf.value.Value.{
   ContractId,
   ContractInst,
@@ -445,7 +445,7 @@ private[dao] trait JdbcLedgerDaoSuite extends AkkaBeforeAndAfterAll with JdbcLed
         submitterInfo = submitterInfo,
         workflowId = entry.workflowId,
         transactionId = entry.transactionId,
-        transaction = entry.transaction.mapNodeId(splitOrThrow),
+        transaction = Tx.CommittedTransaction(entry.transaction.mapNodeId(splitOrThrow)),
         recordTime = entry.recordedAt,
         ledgerEffectiveTime = entry.ledgerEffectiveTime,
         offset = offset,

@@ -28,7 +28,7 @@ import com.daml.ledger.{EventId, WorkflowId}
 import com.daml.lf.archive.Decode
 import com.daml.lf.data.Ref
 import com.daml.lf.data.Ref.{PackageId, Party}
-import com.daml.lf.transaction.Node
+import com.daml.lf.transaction.{Node, Transaction => Tx}
 import com.daml.lf.value.Value.{ContractId, NodeId}
 import com.daml.logging.{ContextualizedLogger, LoggingContext}
 import com.daml.metrics.Metrics
@@ -548,7 +548,7 @@ private class JdbcLedgerDao(
                     transactionId = tx.transactionId,
                     ledgerEffectiveTime = tx.ledgerEffectiveTime,
                     offset = offset,
-                    transaction = tx.transaction.mapNodeId(splitOrThrow),
+                    transaction = Tx.CommittedTransaction(tx.transaction.mapNodeId(splitOrThrow)),
                     divulgedContracts = Nil,
                   )
                   .write()

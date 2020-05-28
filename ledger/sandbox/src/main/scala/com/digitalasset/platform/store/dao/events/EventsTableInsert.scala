@@ -6,7 +6,7 @@ package com.daml.platform.store.dao.events
 import java.time.Instant
 
 import anorm.{BatchSql, NamedParameter}
-import com.daml.ledger.participant.state.v1.{Offset, SubmitterInfo}
+import com.daml.ledger.participant.state.v1.{CommittedTransaction, Offset, SubmitterInfo}
 import com.daml.ledger._
 import com.daml.platform.store.Conversions._
 
@@ -166,7 +166,7 @@ private[events] trait EventsTableInsert { this: EventsTable =>
       transactionId: TransactionId,
       ledgerEffectiveTime: Instant,
       offset: Offset,
-      transaction: Transaction,
+      transaction: CommittedTransaction,
   ): RawBatches =
     transaction
       .fold(AccumulatingBatches.empty) {
