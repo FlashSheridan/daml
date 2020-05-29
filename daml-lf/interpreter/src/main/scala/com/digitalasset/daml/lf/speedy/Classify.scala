@@ -26,8 +26,8 @@ object Classify { // classify the machine state w.r.t what step occurs next
       var ecase: Int = 0,
       var erecdef: Int = 0,
       var ecatch: Int = 0,
-      var eimportvalue: Int = 0,
-      var ewrongcid: Int = 0,
+      var eimportcontract: Int = 0,
+      var eglobaldiscriminatorconflict: Int = 0,
       // kont classification (ctrlValue)
       var kfinished: Int = 0,
       var karg: Int = 0,
@@ -57,7 +57,7 @@ object Classify { // classify the machine state w.r.t what step occurs next
         ("- ecase", ecase),
         ("- erecdef", erecdef),
         ("- ecatch", ecatch),
-        ("- eimportvalue", eimportvalue),
+        ("- eimportcontract", eimportcontract),
         ("CtrlValue:", ctrlValue),
         ("- kfinished", kfinished),
         ("- karg", karg),
@@ -103,8 +103,8 @@ object Classify { // classify the machine state w.r.t what step occurs next
       case _: SEBuiltinRecursiveDefinition => counts.erecdef += 1
       case _: SECatch => counts.ecatch += 1
       case _: SELabelClosure => ()
-      case _: SEImportValue => counts.eimportvalue += 1
-      case _: SEWronglyTypeContractId => counts.ewrongcid += 1
+      case _: SEImportContract => counts.eimportcontract += 1
+      case SEGlobalDiscriminatorConflict => counts.eglobaldiscriminatorconflict += 1
     }
   }
 

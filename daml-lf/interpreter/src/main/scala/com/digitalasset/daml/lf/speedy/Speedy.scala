@@ -130,10 +130,12 @@ object Speedy {
       var compiledPackages: CompiledPackages,
       /* Flag to trace usage of get_time builtins */
       var dependsOnTime: Boolean,
-      // local contracts, that are contracts created in the current transaction)
-      var localContracts: Map[V.ContractId, (Ref.TypeConName, SValue)],
+      // local contracts discriminators, that are discriminators from contracts created in the current transaction)
+      var localDiscriminators: Set[crypto.Hash],
       // global contract discriminators, that are discriminators from contract created in previous transactions
       var globalDiscriminators: Set[crypto.Hash],
+      // cached for contracts created or fetched
+      var cachedContracts: Map[V.ContractId, (Ref.TypeConName, SValue)],
       /* Used when enableLightweightStepTracing is true */
       var steps: Int,
       /* Used when enableInstrumentation is true */
@@ -245,21 +247,23 @@ object Speedy {
       ImmArray(s.asScala)
     }
 
-    def addLocalContract(coid: V.ContractId, templateId: Ref.TypeConName, SValue: SValue) =
-      coid match {
-        case V.ContractId.V1(discriminator, _) if globalDiscriminators.contains(discriminator) =>
-          crash("Conflicting discriminators between a global and local contract ID.")
-        case _ =>
-          localContracts = localContracts.updated(coid, templateId -> SValue)
-      }
+    def addLocalCid(coid: V.ContractId.V1): Unit = {
+      if (globalDiscriminators.contains(coid.discriminator))
+        crash("Conflicting discriminators between a global and local contract ID.")
+      localDiscriminators = localDiscriminators + coid.discriminator
+    }
 
-    def addGlobalCid(cid: V.ContractId) = cid match {
+    // return true in case of success
+    def addGlobalCid(cid: V.ContractId): Boolean = cid match {
       case V.ContractId.V1(discriminator, _) =>
-        if (localContracts.isDefinedAt(V.ContractId.V1(discriminator)))
-          crash("Conflicting discriminators between a global and local contract ID.")
-        else
+        if (localDiscriminators.contains(discriminator))
+          false
+        else {
           globalDiscriminators = globalDiscriminators + discriminator
+          true
+        }
       case _ =>
+        true
     }
 
     /** Reuse an existing speedy machine to evaluate a new expression.
@@ -413,7 +417,11 @@ object Speedy {
     // All the contract IDs contained in the value are considered global.
     // Raises an exception if missing a package.
 
-    def importValue(value: V[V.ContractId]): Unit = {
+    def importContract(
+        coid: V.ContractId,
+        templateId: TypeConName,
+        value: V[V.ContractId],
+    ): Unit = {
       def go(value0: V[V.ContractId]): SValue =
         value0 match {
           case V.ValueList(vs) => SList(vs.map[SValue](go))
@@ -504,7 +512,9 @@ object Speedy {
                   ))
             }
         }
-      returnValue = go(value)
+      val svalue = go(value)
+      cachedContracts = cachedContracts.updated(coid, (templateId, svalue))
+      returnValue = svalue
     }
 
   }
@@ -535,10 +545,11 @@ object Speedy {
         compiledPackages = compiledPackages,
         validating = false,
         dependsOnTime = false,
-        localContracts = Map.empty,
+        localDiscriminators = Set.empty,
         globalDiscriminators = globalCids.collect {
           case V.ContractId.V1(discriminator, _) => discriminator
         },
+        cachedContracts = Map.empty,
         steps = 0,
         track = Instrumentation(),
         profile = new Profile(),

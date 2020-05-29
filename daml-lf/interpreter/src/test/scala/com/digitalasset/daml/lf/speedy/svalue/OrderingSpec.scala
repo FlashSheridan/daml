@@ -11,7 +11,6 @@ import com.daml.lf.data.{FrontStack, ImmArray, Numeric, Ref, Time}
 import com.daml.lf.language.{Ast, Util => AstUtil}
 import com.daml.lf.speedy.SResult._
 import com.daml.lf.speedy.SValue._
-import com.daml.lf.speedy.SExpr.SEImportValue
 import com.daml.lf.speedy.{SBuiltin, SExpr, SValue}
 import com.daml.lf.value.Value
 import com.daml.lf.value.TypedValueGenerators.genAddend

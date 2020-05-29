@@ -72,8 +72,8 @@ object PrettyLightweight { // lightweight pretty printer for CEK machine states
     case SECatch(_, _, _) => "<SECatch...>" //not seen one yet
     case SEAbs(_, _) => "<SEAbs...>" // will never get these on a running machine
     case SELabelClosure(_, _) => "<SELabelClosure...>"
-    case SEImportValue(_) => "<SEImportValue...>"
-    case SEWronglyTypeContractId(_, _, _) => "<SEWronglyTypeContractId...>"
+    case SEImportContract(_, _, _) => "<SEImportContract...>"
+    case SEGlobalDiscriminatorConflict => "<SEGlobalDiscriminatorConflict...>"
   }
 
   def pp(v: SValue): String = v match {

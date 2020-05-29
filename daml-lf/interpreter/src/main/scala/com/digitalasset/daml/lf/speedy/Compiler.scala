@@ -1079,11 +1079,11 @@ private[lf] final case class Compiler(
       case SELabelClosure(label, expr) =>
         SELabelClosure(label, closureConvert(remaps, expr))
 
-      case x: SEWronglyTypeContractId =>
-        throw CompilationError(s"unexpected SEWronglyTypeContractId: $x")
+      case SEGlobalDiscriminatorConflict =>
+        throw CompilationError(s"unexpected SEGlobalDiscriminatorConflict")
 
-      case x: SEImportValue =>
-        throw CompilationError(s"unexpected SEImportValue: $x")
+      case x: SEImportContract =>
+        throw CompilationError(s"unexpected SEImportContract: $x")
     }
   }
 
@@ -1159,10 +1159,10 @@ private[lf] final case class Compiler(
           go(fin)
         case SELabelClosure(_, expr) =>
           go(expr)
-        case x: SEWronglyTypeContractId =>
-          throw CompilationError(s"unexpected SEWronglyTypeContractId: $x")
-        case x: SEImportValue =>
-          throw CompilationError(s"unexpected SEImportValue: $x")
+        case SEGlobalDiscriminatorConflict =>
+          throw CompilationError(s"unexpected SEGlobalDiscriminatorConflict")
+        case x: SEImportContract =>
+          throw CompilationError(s"unexpected SEImportContract: $x")
       }
     go(expr)
     free
@@ -1245,10 +1245,10 @@ private[lf] final case class Compiler(
           go(body)
         case SELabelClosure(_, expr) =>
           go(expr)
-        case x: SEWronglyTypeContractId =>
-          throw CompilationError(s"unexpected SEWronglyTypeContractId: $x")
-        case x: SEImportValue =>
-          throw CompilationError(s"unexpected SEImportValue: $x")
+        case SEGlobalDiscriminatorConflict =>
+          throw CompilationError(s"unexpected SEGlobalDiscriminatorConflict")
+        case x: SEImportContract =>
+          throw CompilationError(s"unexpected SEImportContract: $x")
       }
       go
     }

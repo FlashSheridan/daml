@@ -786,7 +786,8 @@ object SBuiltin {
         )
         .fold(err => throw DamlETransactionError(err), identity)
 
-      machine.addLocalContract(coid, templateId, createArg)
+      machine.addLocalCid(coid)
+      machine.cachedContracts = machine.cachedContracts.updated(coid, (templateId, createArg))
       machine.ptx = newPtx
       checkAborted(machine.ptx)
       machine.returnValue = SContractId(coid)
@@ -884,7 +885,7 @@ object SBuiltin {
         case v => crash(s"expected contract id, got: $v")
       }
 
-      machine.localContracts.get(coid) match {
+      machine.cachedContracts.get(coid) match {
         case Some((tmplId, contract)) =>
           if (tmplId != templateId)
             crash(s"contract $coid ($templateId) not found from partial transaction")
@@ -897,15 +898,7 @@ object SBuiltin {
               templateId,
               machine.committers,
               cbMissing = _ => machine.tryHandleException(),
-              cbPresent = { coinst =>
-                // Note that we cannot throw in this continuation -- instead
-                // set the control appropriately which will crash the machine
-                // correctly later.
-                if (coinst.template != templateId)
-                  machine.ctrl = SEWronglyTypeContractId(coid, templateId, coinst.template)
-                else
-                  machine.ctrl = SEImportValue(coinst.arg.value)
-              },
+              cbPresent = (coinst => machine.ctrl = SEImportContract(coid, templateId, coinst)),
             ),
           )
       }
@@ -980,10 +973,13 @@ object SBuiltin {
               machine.committers, {
                 case SKeyLookupResult.Found(cid) =>
                   machine.ptx = machine.ptx.copy(keys = machine.ptx.keys + (gkey -> Some(cid)))
-                  // We have to check that the discriminator of cid does not conflict with a local ones
-                  // however we cannot raise an exception in case of failure here.
-                  // We delegate to CtrlImportValue the task to check cid.
-                  machine.ctrl = SEImportValue(V.ValueOptional(Some(V.ValueContractId(cid))))
+                  if (machine.addGlobalCid(cid))
+                    machine.returnValue = SOptional(Some(SContractId(cid)))
+                  else
+                    // Note that we cannot throw in this continuation -- instead
+                    // set the control appropriately which will crash the machine
+                    // correctly later.
+                    machine.ctrl = SEGlobalDiscriminatorConflict
                   true
                 case SKeyLookupResult.NotFound =>
                   machine.ptx = machine.ptx.copy(keys = machine.ptx.keys + (gkey -> None))
@@ -1057,10 +1053,13 @@ object SBuiltin {
               machine.committers, {
                 case SKeyLookupResult.Found(cid) =>
                   machine.ptx = machine.ptx.copy(keys = machine.ptx.keys + (gkey -> Some(cid)))
-                  // We have to check that the discriminator of cid does not conflict with a local ones
-                  // however we cannot raise an exception in case of failure here.
-                  // We delegate to CtrlImportValue the task to check cid.
-                  machine.ctrl = SEImportValue(V.ValueContractId(cid))
+                  if (machine.addGlobalCid(cid))
+                    machine.returnValue = SContractId(cid)
+                  else
+                    // Note that we cannot throw in this continuation -- instead
+                    // set the control appropriately which will crash the machine
+                    // correctly later.
+                    machine.ctrl = SEGlobalDiscriminatorConflict
                   true
                 case SKeyLookupResult.NotFound | SKeyLookupResult.NotVisible =>
                   machine.ptx = machine.ptx.copy(keys = machine.ptx.keys + (gkey -> None))
@@ -1087,7 +1086,8 @@ object SBuiltin {
   final case class SBSBeginCommit(optLocation: Option[Location]) extends SBuiltin(2) {
     def execute(args: util.ArrayList[SValue], machine: Machine): Unit = {
       checkToken(args.get(1))
-      machine.localContracts = Map.empty
+      machine.cachedContracts = Map.empty
+      machine.localDiscriminators = Set.empty
       machine.globalDiscriminators = Set.empty
       machine.committers = extractParties(args.get(0))
       machine.commitLocation = optLocation

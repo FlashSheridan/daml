@@ -224,7 +224,7 @@ case class PartialTransaction(
       signatories: Set[Party],
       stakeholders: Set[Party],
       key: Option[Node.KeyWithMaintainers[Tx.Value[Nothing]]],
-  ): Either[String, (Value.ContractId, PartialTransaction)] = {
+  ): Either[String, (Value.ContractId.V1, PartialTransaction)] = {
     val serializableErrs = serializable(coinst.arg)
     if (serializableErrs.nonEmpty) {
       Left(

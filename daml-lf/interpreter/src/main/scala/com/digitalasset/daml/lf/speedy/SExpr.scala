@@ -287,19 +287,21 @@ object SExpr {
   /** When we fetch a contract id from upstream we cannot crash in the upstream
     * calls. Rather, we set the control to this expression and then crash when executing.
     */
-  final case class SEWronglyTypeContractId(
-      acoid: V.ContractId,
-      expected: TypeConName,
-      actual: TypeConName,
-  ) extends SExpr {
-    def execute(machine: Machine): Unit = {
-      throw DamlEWronglyTypedContract(acoid, expected, actual)
-    }
+  final case object SEGlobalDiscriminatorConflict extends SExpr {
+    def execute(machine: Machine): Unit =
+      crash("Conflicting discriminators between a global and local contract ID.")
   }
 
-  final case class SEImportValue(value: V[V.ContractId]) extends SExpr {
+  final case class SEImportContract(
+      coid: V.ContractId,
+      templateId: TypeConName,
+      coinst: V.ContractInst[V.VersionedValue[V.ContractId]],
+  ) extends SExpr {
     def execute(machine: Machine): Unit = {
-      machine.importValue(value)
+      if (coinst.template != templateId)
+        throw DamlEWronglyTypedContract(coid, templateId, coinst.template)
+      else
+        machine.importContract(coid, templateId, coinst.arg.value)
     }
   }
 
