@@ -45,6 +45,7 @@ cd compatibility
 cp ../.bazelrc .bazelrc
 
 bazel shutdown
+cat .bazelrc.local
 bazel fetch @nodejs_dev_env//...
 bazel build //...
 bazel shutdown
