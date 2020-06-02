@@ -8,7 +8,7 @@ jobs:
 
 - job: ${{ parameters.final_job_name }}
   pool:
-    name: linux-pool
+    vmImage: 'Ubuntu 16.04'
   variables:
     base-sha: '9c787d4d24f2b515934c8503ee2bbd7cfac4da20'
     patches: '4650347db9a7e8c65831ab83b80da43b28c3deba 833ca63be2ab14871874ccb697'
@@ -18,8 +18,6 @@ jobs:
   - checkout: self
   - bash: |
       set -euo pipefail
-
-      eval "$(dev-env/bin/dade-assist)"
 
       CACHE_KEY="$(find ci/da-ghc-lib -type f -print0 | sort -z | xargs -r0 md5sum | md5sum | awk '{print $1}')"
       LIB="da-ghc-lib/ghc-lib-$CACHE_KEY.tar.gz"
