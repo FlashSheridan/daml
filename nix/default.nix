@@ -45,7 +45,6 @@ in rec {
     ghcid           = pkgs.haskellPackages.ghcid;
     hlint           = bazel_dependencies.ghcStaticPkgs.hlint;
     ghci            = bazel_dependencies.ghcStatic;
-    stack           = pkgs.stack;
 
     # Hazel’s configure step currently searches for the C compiler in
     # PATH instead of taking it from our cc toolchain so we have to add
