@@ -154,6 +154,7 @@ jobs:
       final_job_name: patch_bazel_windows
 
   - job: Windows
+    condition: false
     dependsOn:
       - check_for_release
       - patch_bazel_windows
@@ -244,7 +245,7 @@ jobs:
     timeoutInMinutes: 60
     pool:
       name: 'windows-pool'
-      demands: assignment -equals default
+      demands: assignment -equals broken-windows
     steps:
       - template: ci/report-start.yml
       - checkout: self
