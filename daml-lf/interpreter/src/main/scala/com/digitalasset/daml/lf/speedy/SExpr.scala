@@ -216,6 +216,48 @@ object SExpr {
   }
 
   /** Pattern match. */
+  final case class SECaseUnit(scrut: SExpr, body: SExpr) extends SExpr with SomeArrayEquals {
+    def execute(machine: Machine): Unit = {
+      machine.pushKont(KMatchUnit(body, machine.frame, machine.actuals, machine.env.size))
+      machine.ctrl = scrut
+    }
+  }
+
+  case class BooleanPattern(trueCase: SExpr, falseCase: SExpr)
+
+  /** Pattern match. */
+  final case class SECaseBool(scrut: SExpr, cases: BooleanPattern)
+      extends SExpr
+      with SomeArrayEquals {
+    def execute(machine: Machine): Unit = {
+      machine.pushKont(KMatchBoolean(cases, machine.frame, machine.actuals, machine.env.size))
+      machine.ctrl = scrut
+    }
+  }
+
+  case class ListPattern(emptyCase: SExpr, nonEmptyCase: SExpr)
+
+  /** Pattern match. */
+  final case class SECaseList(scrut: SExpr, cases: ListPattern) extends SExpr with SomeArrayEquals {
+    def execute(machine: Machine): Unit = {
+      machine.pushKont(KMatchList(cases, machine.frame, machine.actuals, machine.env.size))
+      machine.ctrl = scrut
+    }
+  }
+
+  case class OptionalPattern(emptyCase: SExpr, nonEmptyCase: SExpr)
+
+  /** Pattern match. */
+  final case class SECaseOptional(scrut: SExpr, cases: OptionalPattern)
+      extends SExpr
+      with SomeArrayEquals {
+    def execute(machine: Machine): Unit = {
+      machine.pushKont(KMatchOptional(cases, machine.frame, machine.actuals, machine.env.size))
+      machine.ctrl = scrut
+    }
+  }
+
+  /** Pattern match. */
   final case class SECase(scrut: SExpr, alts: Array[SCaseAlt]) extends SExpr with SomeArrayEquals {
     def execute(machine: Machine): Unit = {
       machine.pushKont(KMatch(alts, machine.frame, machine.actuals, machine.env.size))

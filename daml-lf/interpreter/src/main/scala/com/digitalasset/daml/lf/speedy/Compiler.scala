@@ -25,7 +25,7 @@ import scala.annotation.tailrec
   * a pretty-printer defined in lf.speedy.Pretty, which
   * is exposed via ':speedy' command in the REPL.
   */
-private[lf] object Compiler {
+object Compiler {
 
   case class CompilationError(error: String) extends RuntimeException(error, null, true, false)
   case class PackageNotFound(pkgId: PackageId)
@@ -102,24 +102,34 @@ private[lf] final case class Compiler(
 
   private val logger = LoggerFactory.getLogger(this.getClass)
 
-  private abstract class VarRef { def name: Name }
+  private abstract class VarRef {
+    def name: Name
+  }
+
   // corresponds to DAML-LF expression variable.
   private case class EVarRef(name: ExprVarName) extends VarRef
+
   // corresponds to DAML-LF type variable.
   private case class TVarRef(name: TypeVarName) extends VarRef
 
   private case class Env(position: Int = 0, varIndices: List[(VarRef, Option[Int])] = List.empty) {
     def incrPos: Env = copy(position = position + 1)
+
     def addExprVar(name: Option[ExprVarName], index: Int): Env =
       name.fold(this)(n => copy(varIndices = (EVarRef(n), Some(index)) :: varIndices))
+
     def addExprVar(name: ExprVarName, index: Int): Env =
       addExprVar(Some(name), index)
+
     def addExprVar(name: Option[ExprVarName]): Env =
       incrPos.addExprVar(name, position)
+
     def addExprVar(name: ExprVarName): Env =
       addExprVar(Some(name))
+
     def addTypeVar(name: TypeVarName): Env =
       incrPos.copy(varIndices = (TVarRef(name), Some(position)) :: varIndices)
+
     def hideTypeVar(name: TypeVarName): Env =
       copy(varIndices = (TVarRef(name), None) :: varIndices)
 
@@ -433,53 +443,7 @@ private[lf] final case class Compiler(
         SBStructUpd(field)(translate(struct), translate(update))
 
       case ECase(scrut, alts) =>
-        SECase(
-          translate(scrut),
-          alts.iterator.map {
-            case CaseAlt(pat, expr) =>
-              pat match {
-                case CPVariant(tycon, variant, binder) =>
-                  val variantDef = lookupVariantDefinition(tycon).getOrElse(
-                    throw CompilationError(s"variant $tycon not found"))
-                  withBinders(binder) { _ =>
-                    SCaseAlt(
-                      SCPVariant(tycon, variant, variantDef.constructorRank(variant)),
-                      translate(expr),
-                    )
-                  }
-
-                case CPEnum(tycon, constructor) =>
-                  val enumDef = lookupEnumDefinition(tycon).getOrElse(
-                    throw CompilationError(s"enum $tycon not found"))
-                  SCaseAlt(
-                    SCPEnum(tycon, constructor, enumDef.constructorRank(constructor)),
-                    translate(expr),
-                  )
-
-                case CPNil =>
-                  SCaseAlt(SCPNil, translate(expr))
-
-                case CPCons(head, tail) =>
-                  withBinders(head, tail) { _ =>
-                    SCaseAlt(SCPCons, translate(expr))
-                  }
-
-                case CPPrimCon(pc) =>
-                  SCaseAlt(SCPPrimCon(pc), translate(expr))
-
-                case CPNone =>
-                  SCaseAlt(SCPNone, translate(expr))
-
-                case CPSome(body) =>
-                  withBinders(body) { _ =>
-                    SCaseAlt(SCPSome, translate(expr))
-                  }
-
-                case CPDefault =>
-                  SCaseAlt(SCPDefault, translate(expr))
-              }
-          }.toArray,
-        )
+        translateCase(scrut, alts)
 
       case ENil(_) => SEValue.EmptyList
       case ECons(_, front, tail) =>
@@ -776,6 +740,7 @@ private[lf] final case class Compiler(
       case ScenarioEmbedExpr(_, e) =>
         translateEmbedExpr(e)
     }
+
   private def translateEmbedExpr(expr: Expr): SExpr = {
     withEnv { _ =>
       env = env.incrPos // token
@@ -787,6 +752,99 @@ private[lf] final case class Compiler(
         SEApp(translate(expr), Array(SEVar(1)))
       }
     }
+  }
+
+  private def translateCase(scrut: Expr, alts: ImmArray[CaseAlt]) = {
+    val sscrut = translate(scrut)
+
+    alts match {
+      case ImmArray(CaseAlt(CPDefault, body)) => SECaseUnit(sscrut, translate(body))
+      case ImmArray(CaseAlt(pattern1, expr1), CaseAlt(pattern2 @ _, expr2)) =>
+        def sexpr1(binders: ExprVarName*): SExpr = withBinders(binders: _*)(_ => translate(expr1))
+        def sexpr2(binders: ExprVarName*): SExpr = withBinders(binders: _*)(_ => translate(expr2))
+        def sexpr2N(n: Int): SExpr = withEnv { _ =>
+          Iterator.fill(n)(env = env.incrPos)
+          translate(expr2)
+        }
+        pattern1 match {
+          case CPPrimCon(PCTrue) =>
+            SECaseBool(sscrut, BooleanPattern(sexpr1(), sexpr2()))
+          case CPPrimCon(PCFalse) =>
+            SECaseBool(sscrut, BooleanPattern(sexpr2(), sexpr1()))
+          case CPCons(head, tail) =>
+            SECaseList(sscrut, ListPattern(sexpr2(), sexpr1(head, tail)))
+          case CPNil =>
+            pattern2 match {
+              case CPCons(head, tail) =>
+                SECaseList(sscrut, ListPattern(sexpr1(), sexpr2(head, tail)))
+              case _ =>
+                SECaseList(sscrut, ListPattern(sexpr1(), sexpr2N(2)))
+            }
+          case CPSome(x) =>
+            SECaseOptional(sscrut, OptionalPattern(sexpr2(), sexpr1(x)))
+          case CPNone =>
+            pattern2 match {
+              case CPSome(x) =>
+                SECaseOptional(sscrut, OptionalPattern(sexpr1(), sexpr2(x)))
+              case _ =>
+                SECaseOptional(sscrut, OptionalPattern(sexpr1(), sexpr2N(1)))
+            }
+          case _ =>
+            translateNaiveCase(sscrut, alts)
+        }
+      case _ =>
+        translateNaiveCase(sscrut, alts)
+    }
+  }
+
+  private def translateNaiveCase(sscrut: SExpr, alts: ImmArray[CaseAlt]): SExpr = {
+    SECase(
+      sscrut,
+      alts.iterator.map {
+        case CaseAlt(pat, expr) =>
+          pat match {
+            case CPVariant(tycon, variant, binder) =>
+              val variantDef = lookupVariantDefinition(tycon).getOrElse(
+                throw CompilationError(s"variant $tycon not found"))
+              withBinders(binder) { _ =>
+                SCaseAlt(
+                  SCPVariant(tycon, variant, variantDef.constructorRank(variant)),
+                  translate(expr),
+                )
+              }
+
+            case CPEnum(tycon, constructor) =>
+              val enumDef = lookupEnumDefinition(tycon).getOrElse(
+                throw CompilationError(s"enum $tycon not found"))
+              SCaseAlt(
+                SCPEnum(tycon, constructor, enumDef.constructorRank(constructor)),
+                translate(expr),
+              )
+
+            case CPNil =>
+              SCaseAlt(SCPNil, translate(expr))
+
+            case CPCons(head, tail) =>
+              withBinders(head, tail) { _ =>
+                SCaseAlt(SCPCons, translate(expr))
+              }
+
+            case CPPrimCon(pc) =>
+              SCaseAlt(SCPPrimCon(pc), translate(expr))
+
+            case CPNone =>
+              SCaseAlt(SCPNone, translate(expr))
+
+            case CPSome(body) =>
+              withBinders(body) { _ =>
+                SCaseAlt(SCPSome, translate(expr))
+              }
+
+            case CPDefault =>
+              SCaseAlt(SCPDefault, translate(expr))
+          }
+      }.toArray,
+    )
   }
 
   private def translatePure(body: Expr): SExpr =
@@ -1009,8 +1067,10 @@ private[lf] final case class Compiler(
     // The Map is consulted when translating variable references (SEVar) and free variables of an abstraction (SEAbs)
     def remap(i: Int): SELoc = {
       remaps.get(i) match {
-        case None => throw CompilationError(s"remap($i),remaps=$remaps")
-        case Some(loc) => loc
+        case Some(loc) =>
+          loc
+        case None =>
+          throw CompilationError(s"remap($i),remaps=$remaps")
       }
     }
     expr match {
@@ -1066,6 +1126,34 @@ private[lf] final case class Compiler(
                 closureConvert(shift(remaps, n), body),
               )
           },
+        )
+
+      case SECaseUnit(scrut, body) =>
+        SECaseUnit(
+          closureConvert(remaps, scrut),
+          closureConvert(remaps, body),
+        )
+
+      case SECaseBool(scrut, BooleanPattern(trueCase, falseCase)) =>
+        SECaseBool(
+          closureConvert(remaps, scrut),
+          BooleanPattern(closureConvert(remaps, trueCase), closureConvert(remaps, falseCase)),
+        )
+
+      case SECaseList(scrut, ListPattern(emptyCase, nonEmptyCase)) =>
+        SECaseList(
+          closureConvert(remaps, scrut),
+          ListPattern(
+            closureConvert(remaps, emptyCase),
+            closureConvert(shift(remaps, 2), nonEmptyCase)),
+        )
+
+      case SECaseOptional(scrut, OptionalPattern(emptyCase, nonEmptyCase)) =>
+        SECaseOptional(
+          closureConvert(remaps, scrut),
+          OptionalPattern(
+            closureConvert(remaps, emptyCase),
+            closureConvert(shift(remaps, 1), nonEmptyCase)),
         )
 
       case SELet(bounds, body) =>
@@ -1154,6 +1242,21 @@ private[lf] final case class Compiler(
               val n = patternNArgs(pat)
               bound += n; go(body); bound -= n
           }
+        case SECaseUnit(scrut, alt) =>
+          go(scrut)
+          go(alt)
+        case SECaseBool(scrut, BooleanPattern(trueCase, falseCase)) =>
+          go(scrut)
+          go(trueCase)
+          go(falseCase)
+        case SECaseList(scrut, ListPattern(emptyCase, nonEmptyCase)) =>
+          go(scrut)
+          go(emptyCase)
+          bound += 2; go(nonEmptyCase); bound -= 2
+        case SECaseOptional(scrut, OptionalPattern(emptyCase, nonEmptyCase)) =>
+          go(scrut)
+          go(emptyCase)
+          bound += 1; go(nonEmptyCase); bound -= 1;
         case SELet(bounds, body) =>
           bounds.foreach { e =>
             go(e)
@@ -1242,6 +1345,8 @@ private[lf] final case class Compiler(
               val n = patternNArgs(pat)
               goBody(maxS + n, maxA, maxF)(body)
           }
+        case SECaseUnit(_, _) | SECaseBool(_, _) | SECaseList(_, _) | SECaseOptional(_, _) =>
+          ()
         case SELet(bounds, body) =>
           bounds.zipWithIndex.foreach {
             case (rhs, i) =>

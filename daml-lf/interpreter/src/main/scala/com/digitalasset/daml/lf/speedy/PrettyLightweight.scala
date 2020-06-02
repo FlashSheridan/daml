@@ -41,7 +41,8 @@ object PrettyLightweight { // lightweight pretty printer for CEK machine states
     case _: KPushTo => "KPushTo"
     case _: KCacheVal => "KCacheVal"
     case _: KLocation => "KLocation"
-    case _: KMatch => "KMatch"
+    case _: KMatchUnit | _: KMatchBoolean | _: KMatchList | _: KMatchOptional | _: KMatch =>
+      "KMatch"
     case _: KCatch => "KCatch"
     case _: KLabelClosure => "KLabelClosure"
     case _: KLeaveClosure => "KLeaveClosure"
@@ -69,6 +70,10 @@ object PrettyLightweight { // lightweight pretty printer for CEK machine states
     case SELocation(_, exp) => s"LOC(${pp(exp)})"
     case SELet(rhss, body) => s"let (${commas(rhss.map(pp))}) in ${pp(body)}"
     case SECase(scrut, _) => s"case ${pp(scrut)} of..."
+    case SECaseUnit(scrut, _) => s"case ${pp(scrut)} of..."
+    case SECaseBool(scrut, _) => s"case ${pp(scrut)} of..."
+    case SECaseList(scrut, _) => s"case ${pp(scrut)} of..."
+    case SECaseOptional(scrut, _) => s"case ${pp(scrut)} of..."
     case SEBuiltinRecursiveDefinition(_) => "<SEBuiltinRecursiveDefinition...>"
     case SECatch(_, _, _) => "<SECatch...>" //not seen one yet
     case SEAbs(_, _) => "<SEAbs...>" // will never get these on a running machine

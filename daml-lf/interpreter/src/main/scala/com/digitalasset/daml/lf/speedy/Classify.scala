@@ -102,7 +102,8 @@ object Classify { // classify the machine state w.r.t what step occurs next
       case _: SEVal => counts.eval += 1
       case _: SELocation => counts.elocation += 1
       case _: SELet => counts.elet += 1
-      case _: SECase => counts.ecase += 1
+      case _: SECaseUnit | _: SECaseBool | _: SECaseList | _: SECaseOptional | _: SECase =>
+        counts.ecase += 1
       case _: SEBuiltinRecursiveDefinition => counts.erecdef += 1
       case _: SECatch => counts.ecatch += 1
       case _: SELabelClosure => ()
@@ -121,7 +122,8 @@ object Classify { // classify the machine state w.r.t what step occurs next
       case _: KPushTo => counts.kpushto += 1
       case _: KCacheVal => counts.kcacheval += 1
       case _: KLocation => counts.klocation += 1
-      case _: KMatch => counts.kmatch += 1
+      case _: KMatchUnit | _: KMatchBoolean | _: KMatchList | _: KMatchOptional | _: KMatch =>
+        counts.kmatch += 1
       case _: KCatch => counts.kcatch += 1
       case _: KLabelClosure => ()
       case _: KLeaveClosure => ()

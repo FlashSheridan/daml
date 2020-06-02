@@ -513,11 +513,11 @@ object Ast {
   final case class DataRecord(fields: ImmArray[(FieldName, Type)], optTemplate: Option[Template])
       extends DataCons
   final case class DataVariant(variants: ImmArray[(VariantConName, Type)]) extends DataCons {
-    lazy val constructorRank: Map[VariantConName, Int] =
+    val constructorRank: Map[VariantConName, Int] =
       variants.iterator.map(_._1).zipWithIndex.toMap
   }
   final case class DataEnum(constructors: ImmArray[EnumConName]) extends DataCons {
-    lazy val constructorRank: Map[EnumConName, Int] = constructors.iterator.zipWithIndex.toMap
+    val constructorRank: Map[EnumConName, Int] = constructors.iterator.zipWithIndex.toMap
   }
 
   case class TemplateKey(

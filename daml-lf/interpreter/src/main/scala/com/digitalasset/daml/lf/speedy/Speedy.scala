@@ -7,7 +7,7 @@ package speedy
 import java.util
 
 import com.daml.lf.data.Ref._
-import com.daml.lf.data.{ImmArray, Ref, Time}
+import com.daml.lf.data.{FrontStack, FrontStackCons, ImmArray, Ref, Time}
 import com.daml.lf.language.Ast._
 import com.daml.lf.speedy.SError._
 import com.daml.lf.speedy.SExpr._
@@ -752,6 +752,63 @@ object Speedy {
     def execute(v: SValue, machine: Machine) = {
       actuals.add(v)
       machine.returnValue = SPAP(prim, actuals, arity)
+    }
+  }
+
+  final case class KMatchUnit(body: SExpr, frame: Frame, actuals: Actuals, envSize: Int)
+      extends Kont
+      with SomeArrayEquals {
+    def execute(v: SValue, machine: Machine) = {
+      machine.restoreEnv(frame, actuals, envSize)
+      machine.ctrl = body
+    }
+  }
+
+  final case class KMatchBoolean(
+      cases: BooleanPattern,
+      frame: Frame,
+      actuals: Actuals,
+      envSize: Int)
+      extends Kont
+      with SomeArrayEquals {
+    def execute(v: SValue, machine: Machine) = {
+      machine.restoreEnv(frame, actuals, envSize)
+      machine.ctrl = if (v.asInstanceOf[SBool].value) cases.trueCase else cases.falseCase
+    }
+  }
+
+  final case class KMatchList(cases: ListPattern, frame: Frame, actuals: Actuals, envSize: Int)
+      extends Kont
+      with SomeArrayEquals {
+    def execute(v: SValue, machine: Machine) = {
+      machine.restoreEnv(frame, actuals, envSize)
+      machine.ctrl = v.asInstanceOf[SList].list match {
+        case FrontStack() =>
+          cases.emptyCase
+        case FrontStackCons(head, tail) =>
+          machine.pushEnv(head)
+          machine.pushEnv(SList(tail))
+          cases.nonEmptyCase
+      }
+    }
+  }
+
+  final case class KMatchOptional(
+      cases: OptionalPattern,
+      frame: Frame,
+      actuals: Actuals,
+      envSize: Int)
+      extends Kont
+      with SomeArrayEquals {
+    def execute(v: SValue, machine: Machine) = {
+      machine.restoreEnv(frame, actuals, envSize)
+      machine.ctrl = v.asInstanceOf[SOptional].value match {
+        case None =>
+          cases.emptyCase
+        case Some(x) =>
+          machine.pushEnv(x)
+          cases.nonEmptyCase
+      }
     }
   }
 

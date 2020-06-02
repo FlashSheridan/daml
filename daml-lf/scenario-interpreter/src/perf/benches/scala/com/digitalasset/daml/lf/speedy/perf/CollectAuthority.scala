@@ -1,10 +1,10 @@
 // Copyright (c) 2020 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package com.daml.lf
-package speedy
-package perf
+package com.daml.perf
 
+import com.daml.lf._
+import com.daml.lf.speedy._
 import com.daml.bazeltools.BazelRunfiles._
 import com.daml.lf.archive.{Decode, UniversalArchiveReader}
 import com.daml.lf.data.Ref.{Identifier, QualifiedName, Party}
@@ -42,6 +42,7 @@ class CollectAuthorityState {
 
   @Setup(Level.Trial)
   def init(): Unit = {
+
     val darFile = new File(if (dar.startsWith("//")) rlocation(dar.substring(2)) else dar)
     val packages = UniversalArchiveReader().readFile(darFile).get
     val packagesMap = packages.all.map {
@@ -78,6 +79,7 @@ class CollectAuthorityState {
 
   // This is function that we benchmark
   def run(): Unit = {
+    remy.block
     machine.setExpressionToEvaluate(the_sexpr)
     var step = 0
     var finalValue: SValue = null
